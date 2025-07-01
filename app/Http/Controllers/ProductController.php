@@ -3,91 +3,152 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
-use Illuminate\Http\Request;  // This was missing
-use Illuminate\Http\RedirectResponse;
-use Illuminate\View\View;
+use App\Models\Category;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
-    /**
-     * Display a listing of products
-     */
-    public function index(): View
+    public function index()
     {
-        return view('products.index', [
-            'products' => Product::latest()->paginate(10)
-        ]);
+        $products = Product::with('category')->latest()->paginate(10);
+        return view('products.index', compact('products'));
     }
 
-    /**
-     * Show the form for creating a new product
-     */
-    public function create(): View
+    public function create()
     {
-        return view('products.create');
+        $categories = Category::all();
+        return view('products.create', compact('categories'));
     }
 
-    /**
-     * Store a newly created product
-     */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0|max:999999.99'
+            'price' => 'required|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'stock_quantity' => 'required|integer|min:0',
+            'category_id' => 'required|exists:categories,id',
+            'is_active' => 'boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,webp|max:2048'
         ]);
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            $validated['image'] = $request->file('image')->store('products', 'public');
+        }
 
         Product::create($validated);
 
         return redirect()->route('products.index')
-                        ->with('success', 'Product created successfully');
+                       ->with('success', 'Product created successfully');
     }
 
-    /**
-     * Display the specified product
-     */
-    public function show(Product $product): View
+    public function show(Product $product)
     {
         return view('products.show', compact('product'));
     }
 
-    /**
-     * Show the form for editing the product
-     */
-    public function edit(Product $product): View
+    public function edit(Product $product)
     {
-        return view('products.edit', compact('product'));
+        $categories = Category::all();
+        return view('products.edit', compact('product', 'categories'));
     }
 
-    /**
-     * Update the specified product
-     */
-    public function update(Request $request, Product $product): RedirectResponse
+    public function update(Request $request, Product $product)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0|max:999999.99'
+            'price' => 'required|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'stock_quantity' => 'required|integer|min:0',
+            'category_id' => 'required|exists:categories,id',
+            'is_active' => 'boolean',
+            'image' => 'nullable|image|mimes:jpeg,png,webp|max:2048',
+            'remove_image' => 'boolean'
         ]);
+
+        // Handle image removal
+        if ($request->input('remove_image') && $product->image) {
+            Storage::delete('public/'.$product->image);
+            $validated['image'] = null;
+        }
+
+        // Handle new image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($product->image) {
+                Storage::delete('public/'.$product->image);
+            }
+            $validated['image'] = $request->file('image')->store('products', 'public');
+        }
 
         $product->update($validated);
 
         return redirect()->route('products.index')
-                        ->with('success', 'Product updated successfully');
+                       ->with('success', 'Product updated successfully');
     }
 
-    /**
-     * Remove the specified product
-     */
-    public function destroy(Product $product): RedirectResponse
+      public function destroy(Product $product)
     {
+        // Update is_active to false before deletion
+        $product->update(['is_active' => false]);
+        
+        // Soft delete the product
         $product->delete();
-
+        
         return redirect()->route('products.index')
-                        ->with('success', 'Product deleted successfully');
+                       ->with('success', 'Product deactivated and moved to trash');
+    }
+    public function export()
+    {
+        // Export logic here
+        return response()->streamDownload(function() {
+            // Your export content generation
+        }, 'products-export.csv');
     }
 
-   
+    public function lowStock()
+    {
+        $products = Product::where('stock_quantity', '<', 10)->get();
+        return view('products.low-stock', compact('products'));
+    }
 
+    public function trashed()
+    {
+        $products = Product::onlyTrashed()->get();
+        return view('products.trashed', compact('products'));
+    }
+
+       public function restore($id)
+    {
+        $product = Product::withTrashed()->findOrFail($id);
+        
+        // Restore and set is_active to true
+        $product->restore();
+        $product->update(['is_active' => true]);
+        
+        return redirect()->route('products.index')
+                       ->with('success', 'Product restored and activated');
+    }
+
+      public function forceDelete($id)
+    {
+        $product = Product::withTrashed()->findOrFail($id);
+        
+        // Ensure is_active is false before permanent deletion
+        $product->update(['is_active' => false]);
+        
+        // Delete associated image
+        if ($product->image) {
+            Storage::delete('public/'.$product->image);
+        }
+        
+        $product->forceDelete();
+        
+        return redirect()->route('products.trashed')
+                       ->with('success', 'Product permanently deleted');
+    }
 }
