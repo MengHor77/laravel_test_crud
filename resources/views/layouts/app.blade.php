@@ -20,15 +20,6 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-<<<<<<< HEAD
-                        <a class="nav-link active" href="#" aria-current="page">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">Products</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">About</a>
-=======
                         <a class="nav-link active" href="#"aria-current="page">Home</a>
                     </li>
                     <li class="nav-item">
@@ -36,7 +27,6 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#"aria-current="page">About</a>
->>>>>>> 876d97c6a6e2a578124a274d9d091679779c0442
                     </li>
                 </ul>
             </div>
